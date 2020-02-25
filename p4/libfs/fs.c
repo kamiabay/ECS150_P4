@@ -49,14 +49,8 @@ static Sblok readSuper()
 	return superblock;
 }
 
-static void addFat()
-{
-	FAT oneFat = malloc(sizeof(FAT));
-}
-
 static void readFAT()
 {
-	int first = 1;
 	uint16_t* FAT = malloc(BLOCK_SIZE * mainDisk->superblock->numFATblocks);
 	for (int i = 1; i < mainDisk->superblock->numFATblocks + 1; i++)
 	{
@@ -82,7 +76,11 @@ int fs_mount(const char *diskname)
 		perror("open");
 		return -1;
 	}
+
+	// Allocate the disk
 	mainDisk = malloc(sizeof(disk));
+
+	// Read the superblock
 	mainDisk->superblock = readSuper();
 
 	// Get superblock contents
@@ -104,66 +102,106 @@ int fs_mount(const char *diskname)
 int fs_umount(void)
 {
 	/* TODO: Phase 1 */
-	block_disk_write(0,mainDisk->superblock);
+	// Write the superblock back
+	block_write(0,mainDisk->superblock);
+
+	//Write the FAT blocks back
 	for(int i = 1; i < mainDisk->superblock->numFATblocks + 1; i++)
 	{
-		block_disk_write(i, mainDisk->fat[i]);
+		block_write(i, &mainDisk->fat);
 	}
-	block_disk_write(mainDisk->superblock->rootIndex, mainDisk->rootDir);
+
+	// Write root block back
+	block_write(mainDisk->superblock->rootIndex, mainDisk->rootDir);
+
+	// Delete the block from the disk
 	free(mainDisk);
 	mainDisk = NULL;
+
+	// Close the disk
+	if (block_disk_close() == -1)
+	{
+		perror("close");
+	}
 	return 0;
 }
- 
+
 int fs_info(void)
 {
 	/* TODO: Phase 1 */
+	printf("FS Info\n\n");
 	printf("Total blocks: %i\n",mainDisk->superblock->numTotalBlocks);
 	printf("Number of FAT blocks: %i\n",mainDisk->superblock->numFATblocks);
-	printf("Number of data: %i\n",mainDisk->superblock->numDataBlocks);
+	printf("Root directory Block: %i\n", mainDisk->superblock->rootIndex);
+	printf("Index of first data block: %i\n", mainDisk->superblock->dataIndex);
+	printf("Number of data blocks: %i\n",mainDisk->superblock->numDataBlocks);
+	int freefats = 0;
+	int freeroot = 0;
+	for (int i = 0; i < mainDisk->superblock->numFATblocks; i++) {
+		if (mainDisk->fat[i] == 0) {
+			freefats++;
+		}
+	}
+	for (int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+		if (mainDisk->rootDir[i] == 0) {
+			freeroot++;
+		}
+	}
+	printf("Free FAT ratio: %i/%i\n",freefats,mainDisk->superblock->numFATblocks);
+	printf("Free Root ratio: %i/%i\n",freeroot,FS_FILE_MAX_COUNT);
+	return 0;
 }
 
-int fs_create(const char *filename)
+int fs_create(__attribute__((unused))const char *filename)
 {
 	/* TODO: Phase 2 */
+	return 0;
 }
 
-int fs_delete(const char *filename)
+int fs_delete(__attribute__((unused))const char *filename)
 {
 	/* TODO: Phase 2 */
+	return 0;
 }
 
 int fs_ls(void)
 {
 	/* TODO: Phase 2 */
+	return 0;
 }
 
-int fs_open(const char *filename)
+int fs_open(__attribute__((unused))const char *filename)
 {
 	/* TODO: Phase 3 */
+	return 0;
 }
 
-int fs_close(int fd)
+int fs_close(__attribute__((unused))int fd)
 {
 	/* TODO: Phase 3 */
+	return 0;
 }
 
-int fs_stat(int fd)
+int fs_stat(__attribute__((unused))int fd)
 {
 	/* TODO: Phase 3 */
+	return 0;
 }
 
-int fs_lseek(int fd, size_t offset)
+int fs_lseek(__attribute__((unused))int fd, __attribute__((unused))size_t offset)
 {
 	/* TODO: Phase 3 */
+	return 0;
 }
 
-int fs_write(int fd, void *buf, size_t count)
+int fs_write(__attribute__((unused))int fd, __attribute__((unused))void *buf, __attribute__((unused))size_t count)
 {
 	/* TODO: Phase 4 */
+	return 0;
 }
 
-int fs_read(int fd, void *buf, size_t count)
+int fs_read(__attribute__((unused))int fd,__attribute__((unused)) void *buf, __attribute__((unused))size_t count)
 {
 	/* TODO: Phase 4 */
+	return 0;
 }
