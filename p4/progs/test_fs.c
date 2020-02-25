@@ -254,7 +254,7 @@ void thread_fs_info(void *arg)
 		die("Usage: <diskname>");
 
 	diskname = t_arg->argv[0];
-
+printf("Gets here1");
 	if (fs_mount(diskname))
 		die("Cannot mount diskname");
 

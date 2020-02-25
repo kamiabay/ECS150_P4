@@ -15,7 +15,7 @@ typedef struct flatArray *FAT;
 
 struct Superblock
 {
-	char signature;
+	char signature[8];
 	uint16_t numTotalBlocks;
 	uint16_t rootIndex;
 	uint16_t dataIndex;
@@ -42,16 +42,18 @@ struct Disk
 // Global Disk
 disk mainDisk;
 
-static Sblok readSuper()
+static void readSuper()
 {
-	Sblok superblock = malloc(sizeof(Sblok));
-	block_read(0, &superblock);
-	return superblock;
+	mainDisk->superblock = malloc(sizeof(Sblok));
+	block_read(0,mainDisk->superblock);
 }
 
 static void readFAT()
-{
-	uint16_t* FAT = malloc(BLOCK_SIZE * mainDisk->superblock->numFATblocks);
+{ 
+printf("\n\nGets here5f\n");
+	// We got a malloc error here
+	uint16_t* FAT = malloc(BLOCK_SIZE * mainDisk->superblock->numFATblocks * sizeof(uint16_t));
+printf("Gets here5\n");
 	for (int i = 1; i < mainDisk->superblock->numFATblocks + 1; i++)
 	{
 		block_read(i, &FAT[(i - 1) * BLOCK_SIZE]);
@@ -66,11 +68,6 @@ static void readRoot()
 
 int fs_mount(const char *diskname)
 {
-	if (strncmp("ECS150FS", diskname, 8))
-	{
-		perror("open");
-		return -1;
-	}
 	if (block_disk_open(diskname) == -1)
 	{
 		perror("open");
@@ -81,7 +78,13 @@ int fs_mount(const char *diskname)
 	mainDisk = malloc(sizeof(disk));
 
 	// Read the superblock
-	mainDisk->superblock = readSuper();
+	readSuper();
+	
+	if (strncmp("ECS150FS", mainDisk->superblock->signature,8))
+	{
+		perror("open");
+		return -1;
+	}
 
 	// Get superblock contents
 	if (mainDisk->superblock->numTotalBlocks != block_disk_count())
