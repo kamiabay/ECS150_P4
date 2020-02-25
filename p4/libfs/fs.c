@@ -9,44 +9,38 @@
 
 #define PADDING 4079
 typedef struct Superblock *Sblok;
-typedef struct RootDirect *root;
+typedef struct RootEntry *root;
 typedef struct Disk *disk;
 typedef struct flatArray *FAT;
 
 struct Superblock
 {
-	uint64_t signature;
+	char signature;
 	uint16_t numTotalBlocks;
 	uint16_t rootIndex;
 	uint16_t dataIndex;
 	uint16_t numDataBlocks;
 	uint8_t numFATblocks;
 	uint8_t unused[PADDING];
-};
+}__attribute__((packed));
 
-struct flatArray
-{
-	struct flatArray *next;
-	uint16_t *value;
-};
-
-struct RootDirect
+struct RootEntry
 {
 	uint8_t Filename[16];
 	uint32_t Filesize;
 	uint16_t FirstIndex;
 	uint8_t unused[10];
-};
+}__attribute__((packed));
 
 struct Disk
 {
 	Sblok superblock;
-	FAT fat;
-	root rootDir;
-};
+	uint16_t* fat;
+	root rootDir[FS_FILE_MAX_COUNT];
+}__attribute__((packed));
 
+// Global Disk
 disk mainDisk;
-root rootdir;
 
 static Sblok readSuper()
 {
@@ -54,40 +48,31 @@ static Sblok readSuper()
 	block_read(0, &superblock);
 	return superblock;
 }
+
 static void addFat()
 {
 	FAT oneFat = malloc(sizeof(FAT));
 }
-static void readFAT(Sblok super)
+
+static void readFAT()
 {
 	int first = 1;
-	struct flatArray *arr[super->numFATblocks];
-	//void * fatArray = malloc(sizeof(struct flatArray ) * super->numFATblocks);
-	//mainDisk->fat = fatArray;
-	for (int i = 1; i < super->numFATblocks + 1; i++)
+	uint16_t* FAT = malloc(BLOCK_SIZE * mainDisk->superblock->numFATblocks);
+	for (int i = 1; i < mainDisk->superblock->numFATblocks + 1; i++)
 	{
-		arr[i] = malloc(sizeof(struct flatArray));
-		//FAT oneFat = malloc(sizeof(FAT));
-		block_read(i, &arr[i - 1]->value);
+		block_read(i, &FAT[(i - 1) * BLOCK_SIZE]);
 	}
+	mainDisk->fat = FAT;
 }
-static root readRoot(Sblok super)
+
+static void readRoot()
 {
-	rootdir = malloc(sizeof(root));
-	block_read(super->rootIndex, rootdir);
-	return rootdir;
+	block_read(mainDisk->superblock->rootIndex, &mainDisk->rootDir);
 }
 
 int fs_mount(const char *diskname)
 {
-	block_disk_open(diskname);
-	mainDisk = malloc(sizeof(disk));
-	mainDisk->superblock = readSuper();
-	readFAT(mainDisk->superblock);
-	mainDisk->rootDir = readRoot(mainDisk->superblock);
-	//readData();
-
-	if (strcmp("ECS150FS", (uint64_t)diskname))
+	if (strncmp("ECS150FS", diskname, 8))
 	{
 		perror("open");
 		return -1;
@@ -97,17 +82,45 @@ int fs_mount(const char *diskname)
 		perror("open");
 		return -1;
 	}
+	mainDisk = malloc(sizeof(disk));
+	mainDisk->superblock = readSuper();
+
+	// Get superblock contents
+	if (mainDisk->superblock->numTotalBlocks != block_disk_count())
+	{
+		perror("open");
+		return -1;
+	}
+
+	// Get the FAT table
+	readFAT();
+
+	// Get the root directory
+	readRoot();
+
+	return 0;
 }
 
 int fs_umount(void)
 {
 	/* TODO: Phase 1 */
-	return block_disk_close();
+	block_disk_write(0,mainDisk->superblock);
+	for(int i = 1; i < mainDisk->superblock->numFATblocks + 1; i++)
+	{
+		block_disk_write(i, mainDisk->fat[i]);
+	}
+	block_disk_write(mainDisk->superblock->rootIndex, mainDisk->rootDir);
+	free(mainDisk);
+	mainDisk = NULL;
+	return 0;
 }
-
+ 
 int fs_info(void)
 {
 	/* TODO: Phase 1 */
+	printf("Total blocks: %i\n",mainDisk->superblock->numTotalBlocks);
+	printf("Number of FAT blocks: %i\n",mainDisk->superblock->numFATblocks);
+	printf("Number of data: %i\n",mainDisk->superblock->numDataBlocks);
 }
 
 int fs_create(const char *filename)
