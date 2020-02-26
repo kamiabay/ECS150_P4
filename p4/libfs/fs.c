@@ -11,9 +11,14 @@
 typedef struct Superblock *Sblok;
 typedef struct RootEntry *root;
 typedef struct Disk *disk;
-typedef struct flatArray *FAT;
+// make clean
+// ./fs_make.x disk.fs 4096
+// make
+// ./test_fs.x info disk.fs
 
-struct Superblock
+// make clean & ./fs_make.x disk.fs 4096 & make
+
+struct __attribute__((packed)) Superblock
 {
 	char signature[8];
 	uint16_t numTotalBlocks;
@@ -22,38 +27,40 @@ struct Superblock
 	uint16_t numDataBlocks;
 	uint8_t numFATblocks;
 	uint8_t unused[PADDING];
-}__attribute__((packed));
+};
 
-struct RootEntry
+struct __attribute__((packed)) RootEntry
 {
 	uint8_t Filename[16];
 	uint32_t Filesize;
 	uint16_t FirstIndex;
 	uint8_t unused[10];
-}__attribute__((packed));
+};
 
-struct Disk
+struct __attribute__((packed)) Disk
 {
 	Sblok superblock;
 	uint16_t* fat;
-	root rootDir[FS_FILE_MAX_COUNT];
-}__attribute__((packed));
+	root rootDir;
+};
 
 // Global Disk
-disk mainDisk;
-
+disk mainDisk = NULL;
 static void readSuper()
 {
-	mainDisk->superblock = malloc(sizeof(Sblok));
-	block_read(0,mainDisk->superblock);
+
+	Sblok superblock = malloc(BLOCK_SIZE);
+	if (block_read(0,superblock) == -1){
+		printf("read this failed\n");
+	}
+	mainDisk->superblock = superblock;
+
 }
 
 static void readFAT()
-{ 
-printf("\n\nGets here5f\n");
-	// We got a malloc error here
+{
 	uint16_t* FAT = malloc(BLOCK_SIZE * mainDisk->superblock->numFATblocks * sizeof(uint16_t));
-printf("Gets here5\n");
+
 	for (int i = 1; i < mainDisk->superblock->numFATblocks + 1; i++)
 	{
 		block_read(i, &FAT[(i - 1) * BLOCK_SIZE]);
@@ -63,7 +70,9 @@ printf("Gets here5\n");
 
 static void readRoot()
 {
-	block_read(mainDisk->superblock->rootIndex, &mainDisk->rootDir);
+	root Root = malloc(BLOCK_SIZE * sizeof(uint8_t));
+	block_read(mainDisk->superblock->rootIndex, Root);
+	mainDisk->rootDir = Root;
 }
 
 int fs_mount(const char *diskname)
@@ -75,11 +84,10 @@ int fs_mount(const char *diskname)
 	}
 
 	// Allocate the disk
-	mainDisk = malloc(sizeof(disk));
-
+	mainDisk = malloc(sizeof(struct Disk));
 	// Read the superblock
 	readSuper();
-	
+
 	if (strncmp("ECS150FS", mainDisk->superblock->signature,8))
 	{
 		perror("open");
@@ -111,7 +119,7 @@ int fs_umount(void)
 	//Write the FAT blocks back
 	for(int i = 1; i < mainDisk->superblock->numFATblocks + 1; i++)
 	{
-		block_write(i, &mainDisk->fat);
+		block_write(i, mainDisk->fat);
 	}
 
 	// Write root block back
@@ -132,26 +140,26 @@ int fs_umount(void)
 int fs_info(void)
 {
 	/* TODO: Phase 1 */
-	printf("FS Info\n\n");
-	printf("Total blocks: %i\n",mainDisk->superblock->numTotalBlocks);
-	printf("Number of FAT blocks: %i\n",mainDisk->superblock->numFATblocks);
-	printf("Root directory Block: %i\n", mainDisk->superblock->rootIndex);
-	printf("Index of first data block: %i\n", mainDisk->superblock->dataIndex);
-	printf("Number of data blocks: %i\n",mainDisk->superblock->numDataBlocks);
+	printf("FS Info\n");
+	printf("total_blk_count= %i\n",mainDisk->superblock->numTotalBlocks);
+	printf("fat_blk_count= %i\n",mainDisk->superblock->numFATblocks);
+	printf("rdir_blk= %i\n", mainDisk->superblock->rootIndex);
+	printf("data_blk= %i\n", mainDisk->superblock->dataIndex);
+	printf("data_blk_count=%i\n",mainDisk->superblock->numDataBlocks);
 	int freefats = 0;
 	int freeroot = 0;
-	for (int i = 0; i < mainDisk->superblock->numFATblocks; i++) {
+	for (int i = 0; i < mainDisk->superblock->numDataBlocks; i++) {
 		if (mainDisk->fat[i] == 0) {
 			freefats++;
 		}
 	}
 	for (int i = 0; i < FS_FILE_MAX_COUNT; i++) {
-		if (mainDisk->rootDir[i] == 0) {
+		if (mainDisk->rootDir[i].Filename[0] == '\0') {
 			freeroot++;
 		}
 	}
-	printf("Free FAT ratio: %i/%i\n",freefats,mainDisk->superblock->numFATblocks);
-	printf("Free Root ratio: %i/%i\n",freeroot,FS_FILE_MAX_COUNT);
+	printf("fat_free_ratio=%i/%i\n",freefats,mainDisk->superblock->numDataBlocks);
+	printf("rdir_free_ratio=%i/%i\n",freeroot,FS_FILE_MAX_COUNT);
 	return 0;
 }
 
