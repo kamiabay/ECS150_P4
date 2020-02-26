@@ -176,7 +176,8 @@ void thread_fs_add(void *arg)
 
 	diskname = t_arg->argv[0];
 	filename = t_arg->argv[1];
-
+ 	printf("diskname <%s>\n", diskname);
+  printf("filename <%s>\n", filename);
 	/* Open file on host computer */
 	fd = open(filename, O_RDONLY);
 	if (fd < 0)
@@ -195,9 +196,10 @@ void thread_fs_add(void *arg)
 	 * - mount, create a new file, copy content of host file into this new
 	 *   file, close the new file, and umount
 	 */
+	 printf("oh shit %s\n", diskname);
 	if (fs_mount(diskname))
 		die("Cannot mount diskname");
-
+printf("goes here\n");
 	if (fs_create(filename)) {
 		fs_umount();
 		die("Cannot create file");
@@ -224,6 +226,37 @@ void thread_fs_add(void *arg)
 
 	munmap(buf, st.st_size);
 	close(fd);
+}
+
+void thread_fs_new(void *arg)
+{
+	struct thread_arg *t_arg = arg;
+	char *diskname, *filename;
+
+	if (t_arg->argc < 2)
+		die("Usage: <diskname> <host filename>");
+
+	diskname = t_arg->argv[0];
+	filename = t_arg->argv[1];
+ 	printf("diskname <%s>\n", diskname);
+  printf("filename <%s>\n", filename);
+	/* Open file on host computer */
+	open(filename, O_RDONLY);
+	/* Map file into buffer */
+
+
+	/* Now, deal with our filesystem:
+	 * - mount, create a new file, copy content of host file into this new
+	 *   file, close the new file, and umount
+	 */
+	if (fs_mount(diskname) == -1)
+		printf("Cannot mount diskname\n");
+
+	if (fs_create(filename) == -1) {
+		printf("Cannot create file\n");
+	}
+	fs_ls();
+	fs_umount();
 }
 
 void thread_fs_ls(void *arg)
@@ -279,6 +312,7 @@ static struct {
 	{ "info",	thread_fs_info },
 	{ "ls",		thread_fs_ls },
 	{ "add",	thread_fs_add },
+	{ "new" , thread_fs_new},
 	{ "rm",		thread_fs_rm },
 	{ "cat",	thread_fs_cat },
 	{ "stat",	thread_fs_stat }
