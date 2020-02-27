@@ -210,21 +210,19 @@ int fs_delete(const char *filename)
 		return -1;
 	}
 	mainDisk->rootDir[fileInd].Filesize = 0; // Delete
-	for(int i = 0; i < FS_FILENAME_LEN; i++) { // Remove the filename
-		mainDisk->rootDir[fileInd].Filename[i] = '\0';
-	}
+	strcpy(mainDisk->rootDir[fileInd].Filename, "\0"); // Remove the filename
 	int index = mainDisk->rootDir[fileInd].FirstIndex; // Erase entry from FAT table
-	int entry = mainDisk->fat[index]; // Seg fault occur here
-	int oldentry;
-	while(mainDisk->fat[index] != FAT_EOC) {
-		oldentry = entry;
-		entry = mainDisk->fat[entry];
-		mainDisk->fat[oldentry] = 0;
+	if (index != FAT_EOC){
+		int entry = mainDisk->fat[index]; // Seg fault occur here
+		int oldentry;
+		while(mainDisk->fat[index] != FAT_EOC) {
+			oldentry = entry;
+			entry = mainDisk->fat[entry];
+			mainDisk->fat[oldentry] = 0;
+		}
+		mainDisk->fat[index] = 0;
+		writeFAT(); // Update it to disk
 	}
-	mainDisk->fat[index] = 0;
-	writeFAT(); // Update it to disk
-
-
 	return 0;
 }
 
