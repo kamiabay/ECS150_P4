@@ -184,7 +184,7 @@ int fs_create(const char *filename)
 		}
 	}
 	mainDisk->rootDir[space].FirstIndex = FAT_EOC; // Make start index FAT_EOC
-		strcpy(mainDisk->rootDir[space].Filename, filename); // Read filename into the freespace
+	strcpy(mainDisk->rootDir[space].Filename, filename); // Read filename into the freespace
 	mainDisk->rootDir[space].Filesize = 0; // Initialize the size to zero
 	block_write(mainDisk->superblock->rootIndex, mainDisk->rootDir); // Give superblock updated root directory
 	return 0;
