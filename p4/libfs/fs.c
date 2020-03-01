@@ -263,10 +263,10 @@ int fs_open(const char *filename)
 		findname++;
 	}
 	while(fd < FS_OPEN_MAX_COUNT) {
-		if (fileDesc[fd] == NULL) {
-			fileDesc[fd]->filename = filename;
-			fileDesc[fd]->offset = 0;
-			fileDesc[fd]->size = mainDisk->rootDir[findname].Filesize;
+		if (FileDesc[fd] == NULL) {
+			FileDesc[fd]->filename = filename;
+			FileDesc[fd]->offset = 0;
+			FileDesc[fd]->size = mainDisk->rootDir[findname].Filesize;
 			return fd;
 		}
 		fd++;
@@ -280,11 +280,11 @@ int fs_close(int fd)
 	if (fd < 0 || fd > FS_OPEN_MAX_COUNT) {
 		return -1;
 	}
-	if (fileDesc[fd] == NULL) {
+	if (FileDesc[fd] == NULL) {
 		return -1;
 	}
-	strcpy(fileDesc[fd].Filename, "\0");
-	fileDesc[fd].offset = 0;
+	strcpy(FileDesc[fd]->filename, "\0");
+	FileDesc[fd]->offset = 0;
 	return 0;
 }
 
@@ -294,10 +294,10 @@ int fs_stat(int fd)
 	if (fd < 0 || fd > FS_OPEN_MAX_COUNT) {
 		return -1;
 	}
-	if (fileDesc[fd] == NULL) {
+	if (FileDesc[fd] == NULL) {
 		return -1;
 	}
-	return fileDesc[fd]->size;
+	return FileDesc[fd]->size;
 }
 
 int fs_lseek(__attribute__((unused))int fd, __attribute__((unused))size_t offset)
