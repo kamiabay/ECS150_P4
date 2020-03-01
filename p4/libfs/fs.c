@@ -11,6 +11,7 @@
 #define FAT_EOC 0xFFFF
 typedef struct Superblock *Sblok;
 typedef struct RootEntry *root;
+typedef struct OpenFiles *fdesc;
 typedef struct Disk *disk;
 // make clean
 // ./fs_make.x disk.fs 4096
@@ -38,15 +39,23 @@ struct __attribute__((packed)) RootEntry
 	uint8_t unused[10];
 };
 
+struct __attribute__((packed)) OpenFiles
+{
+	char* filename;
+	int offset;
+	uint32_t size;
+};
+
 struct __attribute__((packed)) Disk
 {
 	Sblok superblock;
 	uint16_t* fat;
 	root rootDir;
-	int open[128];
+	int open[FS_FILE_MAX_COUNT];
 };
 
 disk mainDisk = NULL; // Global Disk
+fdesc FileDesc[FS_FILE_MAX_COUNT];
 
 static void readSuper()
 {
@@ -239,22 +248,56 @@ int fs_ls(void)
 	return 0;
 }
 
-int fs_open(__attribute__((unused))const char *filename)
+int fs_open(const char *filename)
 {
 	/* TODO: Phase 3 */
+	int fd = 0; // initialize fd
+	if (findFile(filename) == -1) {
+		return -1;
+	}
+	int findname = 0;
+	while (findname < FS_FILE_MAX_COUNT) {
+		if (!strcmp(filename, mainDisk->rootDir[findname].Filename)) {
+			break;
+		}
+		findname++;
+	}
+	while(fd < FS_OPEN_MAX_COUNT) {
+		if (fileDesc[fd] == NULL) {
+			fileDesc[fd]->filename = filename;
+			fileDesc[fd]->offset = 0;
+			fileDesc[fd]->size = mainDisk->rootDir[findname].Filesize;
+			return fd;
+		}
+		fd++;
+	}
+	return -1; // It gets here when the maximum files are open
+}
+
+int fs_close(int fd)
+{
+	/* TODO: Phase 3 */
+	if (fd < 0 || fd > FS_OPEN_MAX_COUNT) {
+		return -1;
+	}
+	if (fileDesc[fd] == NULL) {
+		return -1;
+	}
+	strcpy(fileDesc[fd].Filename, "\0");
+	fileDesc[fd].offset = 0;
 	return 0;
 }
 
-int fs_close(__attribute__((unused))int fd)
+int fs_stat(int fd)
 {
 	/* TODO: Phase 3 */
-	return 0;
-}
-
-int fs_stat(__attribute__((unused))int fd)
-{
-	/* TODO: Phase 3 */
-	return 0;
+	if (fd < 0 || fd > FS_OPEN_MAX_COUNT) {
+		return -1;
+	}
+	if (fileDesc[fd] == NULL) {
+		return -1;
+	}
+	return fileDesc[fd]->size;
 }
 
 int fs_lseek(__attribute__((unused))int fd, __attribute__((unused))size_t offset)
