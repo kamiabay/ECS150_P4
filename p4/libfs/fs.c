@@ -44,6 +44,7 @@ struct __attribute__((packed)) OpenFiles
 	char* filename;
 	int offset;
 	uint32_t size;
+	int rootIndex;
 };
 
 struct __attribute__((packed)) Disk
@@ -51,7 +52,6 @@ struct __attribute__((packed)) Disk
 	Sblok superblock;
 	uint16_t* fat;
 	root rootDir;
-	int open[FS_FILE_MAX_COUNT];
 };
 
 disk mainDisk = NULL; // Global Disk
@@ -114,14 +114,14 @@ int fs_mount(const char *diskname)
 	readFAT(); // Get the FAT table
 	mainDisk->fat[0] = FAT_EOC; // Make first FAT block FAT_EOC
 	readRoot(); // Get the root directory
-	memset(mainDisk->open, 0 , sizeof(mainDisk->open)); // All files start off as closed
 	return 0;
 }
 
 int fs_umount(void)
 {
 	for(int i = 0; i < FS_FILE_MAX_COUNT; i++) { // Check all files are closed
-		if (mainDisk->open[i] == 1) {
+		if (FileDesc[i].filename != NULL) {
+			printf("Duh\n");
 			return -1;
 		}
 	}
@@ -215,8 +215,10 @@ int fs_delete(const char *filename)
 	if (fileInd == -1) { // Make sure filename exists
 		return -1;
 	}
-	if(mainDisk->open[fileInd] == 1) { // Make sure file is closed
-		return -1;
+	for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+			if (!strcmp(FileDesc[i].filename , filename)) {
+				return -1;
+		}
 	}
 	mainDisk->rootDir[fileInd].Filesize = 0; // Delete
 	strcpy(mainDisk->rootDir[fileInd].Filename, "\0"); // Remove the filename
@@ -255,6 +257,7 @@ int fs_open(const char *filename)
 	if (findFile(filename) == -1) {
 		return -1;
 	}
+	int rootIndex = findFile(filename);
 	int findname = 0;
 	while (findname < FS_FILE_MAX_COUNT) {
 		if (!strcmp(filename, mainDisk->rootDir[findname].Filename)) {
@@ -267,6 +270,7 @@ int fs_open(const char *filename)
 			FileDesc[fd].filename = (char*)filename;
 			FileDesc[fd].offset = 0;
 			FileDesc[fd].size = mainDisk->rootDir[findname].Filesize;
+			FileDesc[fd].rootIndex = rootIndex;
 			return fd;
 		}
 		fd++;
@@ -283,7 +287,7 @@ int fs_close(int fd)
 	if (FileDesc[fd].filename == NULL) {
 		return -1;
 	}
-	FileDesc[fd].filename = "\0";
+	FileDesc[fd].filename = NULL;
 	FileDesc[fd].offset = 0;
 	return 0;
 }
@@ -318,12 +322,38 @@ int fs_lseek(int fd, size_t offset)
 
 int fs_write(__attribute__((unused))int fd, __attribute__((unused))void *buf, __attribute__((unused))size_t count)
 {
-	/* TODO: Phase 4 */
 	return 0;
+}
+
+static void readData()
+{
+}
+
+static int dataBlockSpan(size_t offset, size_t count)
+{
 }
 
 int fs_read(__attribute__((unused))int fd,__attribute__((unused)) void *buf, __attribute__((unused))size_t count)
 {
 	/* TODO: Phase 4 */
+
+	if (fd < 0 || fd > FS_OPEN_MAX_COUNT)
+	{
+		return -1;
+	}
+	if (FileDesc[fd].filename == NULL)
+	{
+		return -1;
+	}
+	void *buff;
+	size_t offset = FileDesc[fd].offset;
+	int FirstDataIndex = FileDesc[fd].rootIndex;
+	size_t readSize = offset + count;
+	int span = dataBlockSpan(offset, count);
+	while ()
+	{
+		block_read(count, );
+	}
+
 	return 0;
 }
