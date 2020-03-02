@@ -51,8 +51,7 @@ struct __attribute__((packed)) Disk
 	Sblok superblock;
 	uint16_t* fat;
 	root rootDir;
-	int numFree = 128;
-	int numFreeFATS;
+	int open[FS_FILE_MAX_COUNT];
 };
 
 disk mainDisk = NULL; // Global Disk
@@ -66,12 +65,12 @@ static void readSuper()
 	}
 	mainDisk->superblock = superblock;
 
-
 }
 
 static void readFAT()
 {
 	uint16_t* FAT = malloc(BLOCK_SIZE * mainDisk->superblock->numFATblocks * sizeof(uint16_t));
+
 	for (int i = 1; i < mainDisk->superblock->numFATblocks + 1; i++)
 	{
 		block_read(i, &FAT[(i - 1) * BLOCK_SIZE]);
@@ -113,8 +112,9 @@ int fs_mount(const char *diskname)
 		return -1;
 	}
 	readFAT(); // Get the FAT table
-	mainDisk->fat[0] = FAT_EOC; // Make first FAT block FAT_EOC //Remove
+	mainDisk->fat[0] = FAT_EOC; // Make first FAT block FAT_EOC
 	readRoot(); // Get the root directory
+	memset(mainDisk->open, 0 , sizeof(mainDisk->open)); // All files start off as closed
 	return 0;
 }
 
@@ -149,13 +149,19 @@ int fs_info(void)
 	printf("data_blk= %i\n", mainDisk->superblock->dataIndex);
 	printf("data_blk_count=%i\n",mainDisk->superblock->numDataBlocks);
 	int freefats = 0;
+	int freeroot = 0;
 	for (int i = 0; i < mainDisk->superblock->numDataBlocks; i++) {
 		if (mainDisk->fat[i] == 0) {
 			freefats++;
 		}
-	}  /// fat struct
+	}
+	for (int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+		if (mainDisk->rootDir[i].Filename[0] == '\0') {
+			freeroot++;
+		}
+	}
 	printf("fat_free_ratio=%i/%i\n",freefats,mainDisk->superblock->numDataBlocks);
-	printf("rdir_free_ratio=%i/%i\n",mainDisk->numFree,FS_FILE_MAX_COUNT);
+	printf("rdir_free_ratio=%i/%i\n",freeroot,FS_FILE_MAX_COUNT);
 	return 0;
 }
 
@@ -171,6 +177,11 @@ static int freeSpace()
 
 int fs_create(const char *filename)
 {
+	int space = freeSpace(); // Find and get the slot for this file
+	if (space == -1){ // Return -1 if we have no free space
+		printf("Out of space\n");
+		return -1;
+	}
 	if (sizeof(filename) >= FS_FILENAME_LEN) { // Check the length of the file
 		printf("This disk aint big enough for that long ass name\n");
 		return -1;
@@ -181,12 +192,6 @@ int fs_create(const char *filename)
 				return -1;
 		}
 	}
-	int space = freeSpace(); // Find and get the slot for this file
-	if (space == -1){ // Return -1 if we have no free space
-		printf("Out of space\n");
-		return -1;
-	}
-	mainDisk->numFree--;
 	mainDisk->rootDir[space].FirstIndex = FAT_EOC; // Make start index FAT_EOC
 	strcpy(mainDisk->rootDir[space].Filename, filename); // Read filename into the freespace
 	mainDisk->rootDir[space].Filesize = 0; // Initialize the size to zero
@@ -210,9 +215,9 @@ int fs_delete(const char *filename)
 	if (fileInd == -1) { // Make sure filename exists
 		return -1;
 	}
-	// if(mainDisk->open[fileInd] == 1) { // Make sure file is closed
-	// 	return -1;
-	// }
+	if(mainDisk->open[fileInd] == 1) { // Make sure file is closed
+		return -1;
+	}
 	mainDisk->rootDir[fileInd].Filesize = 0; // Delete
 	strcpy(mainDisk->rootDir[fileInd].Filename, "\0"); // Remove the filename
 	int index = mainDisk->rootDir[fileInd].FirstIndex; // Erase entry from FAT table
@@ -225,7 +230,6 @@ int fs_delete(const char *filename)
 			mainDisk->fat[oldentry] = 0;
 		}
 		mainDisk->fat[index] = 0;
-		mainDisk->numFree++;
 		writeFAT(); // Update it to disk
 	}
 	return 0;
@@ -272,6 +276,7 @@ int fs_open(const char *filename)
 
 int fs_close(int fd)
 {
+	/* TODO: Phase 3 */
 	if (fd < 0 || fd > FS_OPEN_MAX_COUNT) {
 		return -1;
 	}
@@ -280,12 +285,12 @@ int fs_close(int fd)
 	}
 	FileDesc[fd].filename = "\0";
 	FileDesc[fd].offset = 0;
-	FileDesc[fd].size = 0;
 	return 0;
 }
 
 int fs_stat(int fd)
 {
+	/* TODO: Phase 3 */
 	if (fd < 0 || fd > FS_OPEN_MAX_COUNT) {
 		return -1;
 	}
@@ -297,6 +302,7 @@ int fs_stat(int fd)
 
 int fs_lseek(int fd, size_t offset)
 {
+	/* TODO: Phase 3 */
 	if (fd < 0 || fd > FS_OPEN_MAX_COUNT) {
 		return -1;
 	}
@@ -313,20 +319,11 @@ int fs_lseek(int fd, size_t offset)
 int fs_write(__attribute__((unused))int fd, __attribute__((unused))void *buf, __attribute__((unused))size_t count)
 {
 	/* TODO: Phase 4 */
-
 	return 0;
 }
 
-int fs_read(int fd, void *buf, size_t count)
+int fs_read(__attribute__((unused))int fd,__attribute__((unused)) void *buf, __attribute__((unused))size_t count)
 {
 	/* TODO: Phase 4 */
-	if (fd < 0 || fd > FS_OPEN_MAX_COUNT) {
-		return -1;
-	}
-	if (FileDesc[fd].filename == NULL) {
-		return -1;
-	}
-
-
 	return 0;
 }
