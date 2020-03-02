@@ -11,7 +11,7 @@
 #define FAT_EOC 0xFFFF
 typedef struct Superblock *Sblok;
 typedef struct RootEntry *root;
-typedef struct OpenFiles *fdesc;
+typedef struct OpenFiles fdesc;
 typedef struct Disk *disk;
 // make clean
 // ./fs_make.x disk.fs 4096
@@ -263,10 +263,10 @@ int fs_open(const char *filename)
 		findname++;
 	}
 	while(fd < FS_OPEN_MAX_COUNT) {
-		if (FileDesc[fd] == NULL) {
-			strcpy(FileDesc[fd]->filename , filename);
-			FileDesc[fd]->offset = 0;
-			FileDesc[fd]->size = mainDisk->rootDir[findname].Filesize;
+		if (FileDesc[fd].filename == NULL) {
+			FileDesc[fd].filename = (char*)filename;
+			FileDesc[fd].offset = 0;
+			FileDesc[fd].size = mainDisk->rootDir[findname].Filesize;
 			return fd;
 		}
 		fd++;
@@ -280,11 +280,11 @@ int fs_close(int fd)
 	if (fd < 0 || fd > FS_OPEN_MAX_COUNT) {
 		return -1;
 	}
-	if (FileDesc[fd] == NULL) {
+	if (FileDesc[fd].filename == NULL) {
 		return -1;
 	}
-	strcpy(FileDesc[fd]->filename, "\0");
-	FileDesc[fd]->offset = 0;
+	FileDesc[fd].filename = "\0";
+	FileDesc[fd].offset = 0;
 	return 0;
 }
 
@@ -294,25 +294,25 @@ int fs_stat(int fd)
 	if (fd < 0 || fd > FS_OPEN_MAX_COUNT) {
 		return -1;
 	}
-	if (FileDesc[fd] == NULL) {
+	if (FileDesc[fd].filename == NULL) {
 		return -1;
 	}
-	return FileDesc[fd]->size;
+	return FileDesc[fd].size;
 }
 
-int fs_lseek(__attribute__((unused))int fd, __attribute__((unused))size_t offset)
+int fs_lseek(int fd, size_t offset)
 {
 	/* TODO: Phase 3 */
 	if (fd < 0 || fd > FS_OPEN_MAX_COUNT) {
 		return -1;
 	}
-	if (offset > FileDesc[fd]->size) {
+	if (offset > FileDesc[fd].size) {
 		return -1;
 	}
-	if (FileDesc[fd] == NULL) {
+	if (FileDesc[fd].filename == NULL) {
 		return -1;
 	}
-	FileDesc[fd]->offset = offset;
+	FileDesc[fd].offset = offset;
 	return 0;
 }
 
