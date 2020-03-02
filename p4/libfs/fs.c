@@ -264,7 +264,7 @@ int fs_open(const char *filename)
 	}
 	while(fd < FS_OPEN_MAX_COUNT) {
 		if (FileDesc[fd] == NULL) {
-			FileDesc[fd]->filename = filename;
+			strcpy(FileDesc[fd]->filename , filename);
 			FileDesc[fd]->offset = 0;
 			FileDesc[fd]->size = mainDisk->rootDir[findname].Filesize;
 			return fd;
@@ -303,6 +303,16 @@ int fs_stat(int fd)
 int fs_lseek(__attribute__((unused))int fd, __attribute__((unused))size_t offset)
 {
 	/* TODO: Phase 3 */
+	if (fd < 0 || fd > FS_OPEN_MAX_COUNT) {
+		return -1;
+	}
+	if (offset > FileDesc[fd]->size) {
+		return -1;
+	}
+	if (FileDesc[fd] == NULL) {
+		return -1;
+	}
+	FileDesc[fd]->offset = offset;
 	return 0;
 }
 
