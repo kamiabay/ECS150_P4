@@ -259,6 +259,64 @@ void thread_fs_new(void *arg)
 	fs_umount();
 }
 
+void thread_fs_off(void *arg)
+{
+	struct thread_arg *t_arg = arg;
+	char *diskname, *filename, *buf;
+	int fs_fd;
+	int stat, read;
+
+	if (t_arg->argc < 2)
+		die("need <diskname> <filename>");
+
+	diskname = t_arg->argv[0];
+	filename = t_arg->argv[1];
+
+	if (fs_mount(diskname))
+		die("Cannot mount diskname");
+
+	fs_fd = fs_open(filename);
+	if (fs_fd < 0) {
+		fs_umount();
+		die("Cannot open file");
+	}
+
+	stat = fs_stat(fs_fd);
+	fs_lseek(fs_fd, 32);
+	if (stat < 0) {
+		fs_umount();
+		die("Cannot stat file");
+	}
+	if (!stat) {
+		/* Nothing to read, file is empty */
+		printf("Empty file\n");
+		return;
+	}
+	buf = malloc(stat);
+	if (!buf) {
+		perror("malloc");
+		fs_umount();
+		die("Cannot malloc");
+	}
+
+	read = fs_read(fs_fd, buf, stat);
+
+	if (fs_close(fs_fd)) {
+		fs_umount();
+		die("Cannot close file");
+	}
+
+	if (fs_umount())
+		die("cannot unmount diskname");
+
+	printf("Read file '%s' (%d/%d bytes)\n", filename, read, stat);
+	printf("Content of the file:\n");
+	fwrite(buf, 1, stat, stdout);
+	fflush(stdout);
+
+	free(buf);
+}
+
 void thread_fs_ls(void *arg)
 {
 	struct thread_arg *t_arg = arg;
@@ -315,7 +373,8 @@ static struct {
 	{ "new" , thread_fs_new},
 	{ "rm",		thread_fs_rm },
 	{ "cat",	thread_fs_cat },
-	{ "stat",	thread_fs_stat }
+	{ "stat",	thread_fs_stat },
+	{ "off", thread_fs_off}
 };
 
 void usage(char *program)

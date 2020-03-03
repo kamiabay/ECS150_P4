@@ -215,11 +215,11 @@ int fs_delete(const char *filename)
 	if (fileInd == -1) { // Make sure filename exists
 		return -1;
 	}
-	for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
-			if (!strcmp(FileDesc[i].filename , filename)) {
-				return -1;
-		}
-	}
+	// for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+	// 		if (!strcmp(FileDesc[i].filename , filename)) {
+	// 			return -1;
+	// 	}
+	// }
 	mainDisk->rootDir[fileInd].Filesize = 0; // Delete
 	strcpy(mainDisk->rootDir[fileInd].Filename, "\0"); // Remove the filename
 	int index = mainDisk->rootDir[fileInd].FirstIndex; // Erase entry from FAT table
@@ -322,6 +322,14 @@ int fs_lseek(int fd, size_t offset)
 
 int fs_write(__attribute__((unused))int fd, __attribute__((unused))void *buf, __attribute__((unused))size_t count)
 {
+	if (fd < 0 || fd > FS_OPEN_MAX_COUNT)
+	{
+		return -1;
+	}
+	if (FileDesc[fd].filename == NULL)
+	{
+		return -1;
+	}
 
 	return 0;
 }
@@ -363,5 +371,5 @@ int fs_read(int fd, void *buf, size_t count)
 	}
 	block_read(mainDisk->superblock->dataIndex + currDataIndex, buff );
 	memcpy(buf, buff + offset, count);
-	return fs_stat(fd);
+	return count;
 }
