@@ -322,18 +322,20 @@ int fs_lseek(int fd, size_t offset)
 
 int fs_write(__attribute__((unused))int fd, __attribute__((unused))void *buf, __attribute__((unused))size_t count)
 {
+
 	return 0;
 }
 
-static void readData()
-{
-}
+// static void readData()
+// {
+// }
 
-static int dataBlockSpan(size_t offset, size_t count)
-{
-}
+// static int dataBlockSpan(size_t offset, size_t count)
+// {
 
-int fs_read(__attribute__((unused))int fd,__attribute__((unused)) void *buf, __attribute__((unused))size_t count)
+// }
+
+int fs_read(int fd, void *buf, size_t count)
 {
 	/* TODO: Phase 4 */
 
@@ -345,15 +347,21 @@ int fs_read(__attribute__((unused))int fd,__attribute__((unused)) void *buf, __a
 	{
 		return -1;
 	}
-	void *buff;
+	void *buff = malloc(BLOCK_SIZE * sizeof(buf));
 	size_t offset = FileDesc[fd].offset;
-	int FirstDataIndex = FileDesc[fd].rootIndex;
-	size_t readSize = offset + count;
-	int span = dataBlockSpan(offset, count);
-	while ()
-	{
-		block_read(count, );
-	}
+	int currDataIndex = FileDesc[fd].rootIndex;
+	//size_t readEnd = offset + count;
+	//int StartBlock = offset / BLOCK_SIZE;
+	//int EndBlock = readEnd / BLOCK_SIZE;
+	//int span = dataBlockSpan(offset, readEnd);
 
-	return 0;
+	if (mainDisk->fat[currDataIndex] != FAT_EOC)
+	while (   mainDisk->fat[currDataIndex] != FAT_EOC   )
+	{
+		block_read(mainDisk->superblock->dataIndex + currDataIndex, buff );
+		currDataIndex = mainDisk->fat[currDataIndex];
+	}
+	block_read(mainDisk->superblock->dataIndex + currDataIndex, buff );
+	memcpy(buf, buff + offset, count);
+	return fs_stat(fd);
 }
