@@ -228,6 +228,40 @@ printf("goes here\n");
 	close(fd);
 }
 
+void thread_fs_write(void* arg)
+{
+	struct thread_arg *t_arg = arg;
+	char *diskname, *filename , *text;
+	int fd;
+	struct stat st;
+
+
+	if (t_arg->argc < 2)
+		die("Usage: <diskname> <host filename>");
+
+	diskname = t_arg->argv[0];
+	filename = t_arg->argv[1];
+	text = t_arg->argv[2];
+	printf("diskname <%s>\n", diskname);
+	printf("filename <%s>\n", filename);
+	fd = open(filename, O_RDONLY);
+	if (fd < 0)
+		die_perror("open");
+	if (fstat(fd, &st))
+		die_perror("fstat");
+	if (!S_ISREG(st.st_mode))
+		die("Not a regular file: %s\n", filename);
+
+int stat = fs_write(fd,text,sizeof(text));
+if (stat == -1) {
+	printf("oh shit\n");
+}
+fs_close(fd);
+fs_umount();
+
+
+}
+
 void thread_fs_new(void *arg)
 {
 	struct thread_arg *t_arg = arg;
@@ -374,6 +408,7 @@ static struct {
 	{ "rm",		thread_fs_rm },
 	{ "cat",	thread_fs_cat },
 	{ "stat",	thread_fs_stat },
+	{  "write", thread_fs_write},
 	{ "off", thread_fs_off}
 };
 

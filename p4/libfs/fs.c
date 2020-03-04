@@ -203,6 +203,16 @@ static int findFile(const char *filename)
 {
 	for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
 			if (!strcmp(filename, mainDisk->rootDir[i].Filename)) {
+				return mainDisk->rootDir[i].FirstIndex;
+		}
+	}
+	return -1;
+}
+
+static int findFileInDisk(const char *filename)
+{
+	for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+			if (!strcmp(filename, mainDisk->rootDir[i].Filename)) {
 				return i;
 		}
 	}
@@ -211,7 +221,7 @@ static int findFile(const char *filename)
 
 int fs_delete(const char *filename)
 {
-	int fileInd = findFile(filename); //Get index in root directory
+	int fileInd = findFileInDisk(filename); //Get index in root directory
 	if (fileInd == -1) { // Make sure filename exists
 		return -1;
 	}
@@ -320,8 +330,19 @@ int fs_lseek(int fd, size_t offset)
 	return 0;
 }
 
-int fs_write(__attribute__((unused))int fd, __attribute__((unused))void *buf, __attribute__((unused))size_t count)
+static int findFirstFAT()
 {
+	for (int i = 0; i < mainDisk->superblock->numFATblocks * 2048; i++) {
+		if (mainDisk->fat[i] == 0) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+int fs_write(int fd, void *buf, size_t count)
+{
+	count = count;
 	if (fd < 0 || fd > FS_OPEN_MAX_COUNT)
 	{
 		return -1;
@@ -330,18 +351,21 @@ int fs_write(__attribute__((unused))int fd, __attribute__((unused))void *buf, __
 	{
 		return -1;
 	}
+	int findFAT = findFirstFAT();
+	if (findFAT == 0) {
+		return -1;
+	}
+	size_t offset = FileDesc[fd].offset;
+	void* buff = malloc(BLOCK_SIZE);
+	if (FileDesc[fd].size == 0) {
+		mainDisk->fat[findFAT] = FAT_EOC;
+		FileDesc[fd].rootIndex = findFAT;
+	}
+	block_write(mainDisk->superblock->dataIndex + findFAT, buff);
+	memcpy(buf, buff + offset, count );
 
 	return 0;
 }
-
-// static void readData()
-// {
-// }
-
-// static int dataBlockSpan(size_t offset, size_t count)
-// {
-
-// }
 
 int fs_read(int fd, void *buf, size_t count)
 {
@@ -355,21 +379,21 @@ int fs_read(int fd, void *buf, size_t count)
 	{
 		return -1;
 	}
-	void *buff = malloc(BLOCK_SIZE * sizeof(buf));
+
+	int numBlocks = count / BLOCK_SIZE + 1;
+	void *buff = malloc(BLOCK_SIZE * numBlocks); // FIXME: BLOCK_SIZE * number of blocks accessed
+	void *total = malloc(BLOCK_SIZE * numBlocks);
 	size_t offset = FileDesc[fd].offset;
 	int currDataIndex = FileDesc[fd].rootIndex;
-	//size_t readEnd = offset + count;
-	//int StartBlock = offset / BLOCK_SIZE;
-	//int EndBlock = readEnd / BLOCK_SIZE;
-	//int span = dataBlockSpan(offset, readEnd);
-
-	if (mainDisk->fat[currDataIndex] != FAT_EOC)
 	while (   mainDisk->fat[currDataIndex] != FAT_EOC   )
 	{
 		block_read(mainDisk->superblock->dataIndex + currDataIndex, buff );
+		strcat(total, buff);
 		currDataIndex = mainDisk->fat[currDataIndex];
 	}
 	block_read(mainDisk->superblock->dataIndex + currDataIndex, buff );
-	memcpy(buf, buff + offset, count);
+	strcat(total, buff);
+	memcpy(buf, total + offset, count);
+
 	return count;
 }
