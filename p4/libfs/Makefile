@@ -16,7 +16,6 @@ deps := $(patsubst %.o,%.d,$(objs))
 DEPFLAGS = -MMD -MF $(@:.o=.d)
 
 %.o: %.c
-	@echo "CC $@"
 	$(Q) $(CC) $(CFLAGS) -c -o $@ $< $(DEPFLAGS)
 
 $(lib): $(objs) $(other)

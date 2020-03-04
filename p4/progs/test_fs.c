@@ -410,6 +410,8 @@ static struct {
 	{ "stat",	thread_fs_stat },
 	{  "write", thread_fs_write},
 	{ "off", thread_fs_off}
+	// File descriptors, reading/writing, error management
+	
 };
 
 void usage(char *program)
