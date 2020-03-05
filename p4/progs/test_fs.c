@@ -228,6 +228,71 @@ printf("goes here\n");
 	close(fd);
 }
 
+void thread_fs_addoff(void *arg)
+{
+	struct thread_arg *t_arg = arg;
+	char *diskname, *filename, *buf;
+	int fd, fs_fd;
+	struct stat st;
+	int written;
+
+	if (t_arg->argc < 2)
+		die("Usage: <diskname> <host filename>");
+
+	diskname = t_arg->argv[0];
+	filename = t_arg->argv[1];
+ 	printf("diskname <%s>\n", diskname);
+  printf("filename <%s>\n", filename);
+	/* Open file on host computer */
+	fd = open(filename, O_RDONLY);
+	if (fd < 0)
+		die_perror("open");
+	if (fstat(fd, &st))
+		die_perror("fstat");
+	if (!S_ISREG(st.st_mode))
+		die("Not a regular file: %s\n", filename);
+
+	/* Map file into buffer */
+	buf = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (!buf)
+		die_perror("mmap");
+
+	/* Now, deal with our filesystem:
+	 * - mount, create a new file, copy content of host file into this new
+	 *   file, close the new file, and umount
+	 */
+	 printf("oh shit %s\n", diskname);
+	if (fs_mount(diskname))
+		die("Cannot mount diskname");
+printf("goes here\n");
+	if (fs_create(filename)) {
+		fs_umount();
+		die("Cannot create file");
+	}
+
+	fs_fd = fs_open(filename);
+	if (fs_fd < 0) {
+		fs_umount();
+		die("Cannot open file");
+	}
+fs_lseek(fs_fd, 16);
+	written = fs_write(fs_fd, buf, st.st_size);
+
+	if (fs_close(fs_fd)) {
+		fs_umount();
+		die("Cannot close file");
+	}
+
+	if (fs_umount())
+		die("Cannot unmount diskname");
+
+	printf("Wrote file '%s' (%d/%zu bytes)\n", filename, written,
+		   st.st_size);
+
+	munmap(buf, st.st_size);
+	close(fd);
+}
+
 void thread_fs_write(void* arg)
 {
 	struct thread_arg *t_arg = arg;
@@ -389,6 +454,37 @@ void thread_fs_info(void *arg)
 		die("Cannot unmount diskname");
 }
 
+void thread_fs_mod(void* arg)
+{
+	struct thread_arg *t_arg = arg;
+	struct stat st;
+	char *diskname, *filename;
+	int fd;
+	if (t_arg->argc < 2)
+		die("Usage: <diskname> <host filename>");
+
+	diskname = t_arg->argv[0];
+	filename = t_arg->argv[1];
+	fs_mount(diskname);
+	int fs_fd = fs_open(filename);
+	fd = open(filename, O_RDONLY);
+	if (fd < 0)
+		die_perror("open");
+	if (fstat(fd, &st))
+		die_perror("fstat");
+	if (!S_ISREG(st.st_mode))
+		die("Not a regular file: %s\n", filename);
+
+	char* buffer = "Ich habe Scheisse";
+	int stat = fs_write(fs_fd, buffer, sizeof(buffer));
+	if (stat == -1) {
+		printf("Learn to write.\n");
+	}
+
+fs_close(fd);
+fs_umount();
+}
+
 size_t get_argv(char *argv)
 {
 	long int ret = strtol(argv, NULL, 0);
@@ -404,12 +500,14 @@ static struct {
 	{ "info",	thread_fs_info },
 	{ "ls",		thread_fs_ls },
 	{ "add",	thread_fs_add },
+	{ "addoff",	thread_fs_addoff },
 	{ "new" , thread_fs_new},
 	{ "rm",		thread_fs_rm },
 	{ "cat",	thread_fs_cat },
 	{ "stat",	thread_fs_stat },
 	{  "write", thread_fs_write},
-	{ "off", thread_fs_off}
+	{ "off", thread_fs_off},
+	{ "mod", thread_fs_mod}
 	// File descriptors, reading/writing, error management
 	
 };

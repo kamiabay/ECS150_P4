@@ -13,6 +13,7 @@ typedef struct Superblock *Sblok;
 typedef struct RootEntry *root;
 typedef struct OpenFiles fdesc;
 typedef struct Disk *disk;
+int diskOpened = 0;
 // make clean
 // ./fs_make.x disk.fs 4096
 // make
@@ -114,11 +115,16 @@ int fs_mount(const char *diskname)
 	readFAT(); // Get the FAT table
 	mainDisk->fat[0] = FAT_EOC; // Make first FAT block FAT_EOC
 	readRoot(); // Get the root directory
+	diskOpened = 1;
 	return 0;
 }
 
 int fs_umount(void)
 {
+	if (diskOpened == 0) 
+	{
+		return -1;
+	}
 	for(int i = 0; i < FS_FILE_MAX_COUNT; i++) { // Check all files are closed
 		if (FileDesc[i].filename != NULL) {
 			printf("Duh\n");
@@ -137,6 +143,7 @@ int fs_umount(void)
 	{
 		perror("close");
 	}
+	diskOpened = 0;
 	return 0;
 }
 
@@ -230,15 +237,16 @@ int fs_delete(const char *filename)
 	// 			return -1;
 	// 	}
 	// }
+	int initSize = mainDisk->rootDir[fileInd].Filesize;
 	mainDisk->rootDir[fileInd].Filesize = 0; // Delete
 	strcpy(mainDisk->rootDir[fileInd].Filename, "\0"); // Remove the filename
 	int index = mainDisk->rootDir[fileInd].FirstIndex; // Erase entry from FAT table
 	printf("Size %i\n", mainDisk->rootDir[fileInd].Filesize);
 	printf("Index %i\n", fileInd);
-	if (mainDisk->fat[index] != FAT_EOC && mainDisk->rootDir[fileInd].Filesize != 0){
+	if (mainDisk->fat[index] != FAT_EOC && initSize != 0){
 		int entry = mainDisk->fat[index];
 		int oldentry;
-		while(mainDisk->fat[index] != FAT_EOC) {
+		while(entry != FAT_EOC) {
 			oldentry = entry;
 			entry = mainDisk->fat[entry];
 			mainDisk->fat[oldentry] = 0;
@@ -287,6 +295,7 @@ int fs_open(const char *filename)
 			FileDesc[fd].offset = 0;
 			FileDesc[fd].size = mainDisk->rootDir[findname].Filesize;
 			FileDesc[fd].dataIndex = rootIndex;
+			printf("fd open %i\n", fd);
 			return fd;
 		}
 		fd++;
@@ -364,13 +373,17 @@ static void updateFAT(int fd)
 
 int fs_write(int fd, void *buf, size_t count)
 {
-	count = count;
 	size_t offset = FileDesc[fd].offset;
+	//size_t offsetMod = offset % BLOCK_SIZE;
+	//size_t offsetDiv = offset / BLOCK_SIZE;
 	int fatIndex = findFirstFAT();
+	printf("fd: %i\n", FileDesc[fd].offset);
 	if (fd < 0 || fd > FS_OPEN_MAX_COUNT || FileDesc[fd].filename == NULL || fatIndex == -1)
 	{
+		printf("FAIL WERITE\n");
 		return -1;
 	}
+
 	FileDesc[fd].dataIndex = fatIndex;
 	//size_t offset = FileDesc[fd].offset;
 	// double numBlocksD = count / BLOCK_SIZE;
@@ -392,22 +405,9 @@ int currDataIndex = FileDesc[fd].dataIndex;
 // 	moreBlocks++;
 // }
 int moreBlocks = count / BLOCK_SIZE + 1;
-if (FileDesc[fd].size == 0) {
-
-	while (   mainDisk->fat[currDataIndex] != FAT_EOC   )
-	{
-	block_write(mainDisk->superblock->dataIndex + currDataIndex, buf );
-	strcat(total, buf);
-	currDataIndex = mainDisk->fat[currDataIndex];
-	}
-	block_write(mainDisk->superblock->dataIndex + currDataIndex, buf );
-	strcat(total, buf);
-	memcpy(buff + offset, buf, count);
-
-
-	// block_read(mainDisk->superblock->dataIndex + fatIndex, buff );
-	// printf("blocks = %s\n", (char*)buff);
-	mainDisk->rootDir[  findFileInDisk(FileDesc[fd].filename)  ].FirstIndex = fatIndex;
+//if (FileDesc[fd].size == 0) {
+	printf("Writing new file\n");
+	
 
 	mainDisk->fat[fatIndex] = FAT_EOC;
 	if (moreBlocks > 1)
@@ -416,39 +416,53 @@ if (FileDesc[fd].size == 0) {
 			updateFAT(fd);
 		}
 	}
-	FileDesc[fd].size += count;
-}
-else {
-	for (int i = 0; i < moreBlocks; i++) {
-		updateFAT(fd);
+int i = 0;
+	while (   mainDisk->fat[currDataIndex] != FAT_EOC   )
+	{
+		printf("zzzzzzz %i\n", currDataIndex);
+		printf("sssssss %i\n", mainDisk->fat[currDataIndex]);
+	block_write(mainDisk->superblock->dataIndex + currDataIndex, buf + BLOCK_SIZE * i + offset );
+	i++;
+	strcat(total, buf);
+	currDataIndex = mainDisk->fat[currDataIndex];
 	}
-}
+	printf("zzzzzzz %i\n", currDataIndex);
+	printf("sssssss %i\n", mainDisk->fat[currDataIndex]);
+	block_write(mainDisk->superblock->dataIndex + currDataIndex, buf + BLOCK_SIZE * i + offset);
+	strcat(total, buf);
+	memcpy(buff, buf, count);
 
- // for (int i = 0; i< numBlocks ; i++){
-	// if (mainDisk->fat[fatIndex] == FAT_EOC) {
-	// 	break;
-	// }
-	// //block_write(mainDisk->superblock->dataIndex + fatIndex, buf );
-	// fatIndex++;
- // }
- // memcpy(buf, )
-	// while (    || numBlocks != i   )
-	// {
-	// 	// 		printf("%i\n", fatIndex);
-	// 	// printf("%i\n", mainDisk->superblock->dataIndex);
-	// 	block_write(mainDisk->superblock->dataIndex + fatIndex, buff );
-	// 	fatIndex++;
-	// 	i++;
-	// 	//strcat(buf, buff);
-	// //	fatIndex = mainDisk->fat[fatIndex];
-	// }
-	// if (FileDesc[fd].size == 0) {
-	// 	mainDisk->fat[findFAT] = FAT_EOC;
-	// 	FileDesc[fd].rootIndex = findFAT;
-	// }
+
+	// block_read(mainDisk->superblock->dataIndex + fatIndex, buff );
+	// printf("blocks = %s\n", (char*)buff);
+	mainDisk->rootDir[  findFileInDisk(FileDesc[fd].filename)  ].FirstIndex = fatIndex;
+	FileDesc[fd].size = count;
+//}
+// else {
+// 	printf("Mod should go here\n");
+// 	int BlockWithOffset = FileDesc[fd].offset / BLOCK_SIZE;
+// 	//int OffsetInBlock = FileDesc[fd].offset % BLOCK_SIZE;
+// 	for (int i = 0; i < BlockWithOffset - 1; i++) {
+// 		currDataIndex = mainDisk->fat[currDataIndex];
+// 	}
+// 	block_write(mainDisk->superblock->dataIndex + currDataIndex, buf );
+// 	memcpy(buff + offset, buf, count);
+// 	// while (   mainDisk->fat[currDataIndex] != FAT_EOC   )
+// 	// {
+// 	// block_write(mainDisk->superblock->dataIndex + currDataIndex, buf );
+// 	// strcat(total, buf);
+// 	// currDataIndex = mainDisk->fat[currDataIndex];
+// 	// }
+// 	// block_write(mainDisk->superblock->dataIndex + currDataIndex, buf );
+// 	// strcat(total, buf);
+// 	// memcpy(buff + offset, buf, count);
+// 	mainDisk->rootDir[  findFileInDisk(FileDesc[fd].filename)  ].FirstIndex = fatIndex;
+// 	for (int i = 0; i < moreBlocks; i++) {
+// 		updateFAT(fd);
+// 	}
+// }
 printf("FDFFFFFFFF   %i\n", findFileInDisk(FileDesc[fd].filename));
 mainDisk->rootDir[  findFileInDisk(FileDesc[fd].filename)  ].Filesize = count;
-
 	return count;
 }
 
@@ -464,7 +478,6 @@ int fs_read(int fd, void *buf, size_t count)
 	{
 		return -1;
 	}
-
 	// double numBlocksD = count / BLOCK_SIZE;
 	// int numBlocks = count / BLOCK_SIZE;
 	// if ((double)numBlocks != numBlocksD) {
@@ -477,7 +490,6 @@ int fs_read(int fd, void *buf, size_t count)
 	int currDataIndex = FileDesc[fd].dataIndex;
 	while (   mainDisk->fat[currDataIndex] != FAT_EOC   )
 	{
-		printf("%i\n", currDataIndex);
 		block_read(mainDisk->superblock->dataIndex + currDataIndex, buff );
 		strcat(total, buff);
 		currDataIndex = mainDisk->fat[currDataIndex];
