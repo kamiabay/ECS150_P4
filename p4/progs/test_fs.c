@@ -456,17 +456,20 @@ void thread_fs_info(void *arg)
 
 void thread_fs_mod(void* arg)
 {
-	struct thread_arg *t_arg = arg;
+		struct thread_arg *t_arg = arg;
+	char *diskname, *filename, *buf;
+	int fd, fs_fd;
 	struct stat st;
-	char *diskname, *filename;
-	int fd;
+	int written;
+
 	if (t_arg->argc < 2)
 		die("Usage: <diskname> <host filename>");
 
 	diskname = t_arg->argv[0];
 	filename = t_arg->argv[1];
-	fs_mount(diskname);
-	int fs_fd = fs_open(filename);
+ 	printf("diskname <%s>\n", diskname);
+  printf("filename <%s>\n", filename);
+	/* Open file on host computer */
 	fd = open(filename, O_RDONLY);
 	if (fd < 0)
 		die_perror("open");
@@ -475,14 +478,40 @@ void thread_fs_mod(void* arg)
 	if (!S_ISREG(st.st_mode))
 		die("Not a regular file: %s\n", filename);
 
-	char* buffer = "Ich habe Scheisse";
-	int stat = fs_write(fs_fd, buffer, sizeof(buffer));
-	if (stat == -1) {
-		printf("Learn to write.\n");
+	/* Map file into buffer */
+	buf = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (!buf)
+		die_perror("mmap");
+
+	/* Now, deal with our filesystem:
+	 * - mount, create a new file, copy content of host file into this new
+	 *   file, close the new file, and umount
+	 */
+	 printf("oh shit %s\n", diskname);
+	if (fs_mount(diskname))
+		die("Cannot mount diskname");
+
+	fs_fd = fs_open(filename);
+	if (fs_fd < 0) {
+		fs_umount();
+		die("Cannot open file");
 	}
 
-fs_close(fd);
-fs_umount();
+	written = fs_write(fs_fd, buf, st.st_size);
+
+	if (fs_close(fs_fd)) {
+		fs_umount();
+		die("Cannot close file");
+	}
+
+	if (fs_umount())
+		die("Cannot unmount diskname");
+
+	printf("Wrote file '%s' (%d/%zu bytes)\n", filename, written,
+		   st.st_size);
+
+	munmap(buf, st.st_size);
+	close(fd);
 }
 
 size_t get_argv(char *argv)
