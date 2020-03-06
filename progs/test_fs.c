@@ -176,8 +176,7 @@ void thread_fs_add(void *arg)
 
 	diskname = t_arg->argv[0];
 	filename = t_arg->argv[1];
- 	printf("diskname <%s>\n", diskname);
-  printf("filename <%s>\n", filename);
+
 	/* Open file on host computer */
 	fd = open(filename, O_RDONLY);
 	if (fd < 0)
@@ -196,10 +195,9 @@ void thread_fs_add(void *arg)
 	 * - mount, create a new file, copy content of host file into this new
 	 *   file, close the new file, and umount
 	 */
-	 printf("oh shit %s\n", diskname);
 	if (fs_mount(diskname))
 		die("Cannot mount diskname");
-printf("goes here\n");
+
 	if (fs_create(filename)) {
 		fs_umount();
 		die("Cannot create file");
@@ -226,194 +224,6 @@ printf("goes here\n");
 
 	munmap(buf, st.st_size);
 	close(fd);
-}
-
-void thread_fs_addoff(void *arg)
-{
-	struct thread_arg *t_arg = arg;
-	char *diskname, *filename, *buf;
-	int fd, fs_fd;
-	struct stat st;
-	int written;
-
-	if (t_arg->argc < 2)
-		die("Usage: <diskname> <host filename>");
-
-	diskname = t_arg->argv[0];
-	filename = t_arg->argv[1];
- 	printf("diskname <%s>\n", diskname);
-  printf("filename <%s>\n", filename);
-	/* Open file on host computer */
-	fd = open(filename, O_RDONLY);
-	if (fd < 0)
-		die_perror("open");
-	if (fstat(fd, &st))
-		die_perror("fstat");
-	if (!S_ISREG(st.st_mode))
-		die("Not a regular file: %s\n", filename);
-
-	/* Map file into buffer */
-	buf = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-	if (!buf)
-		die_perror("mmap");
-
-	/* Now, deal with our filesystem:
-	 * - mount, create a new file, copy content of host file into this new
-	 *   file, close the new file, and umount
-	 */
-	 printf("oh shit %s\n", diskname);
-	if (fs_mount(diskname))
-		die("Cannot mount diskname");
-printf("goes here\n");
-	if (fs_create(filename)) {
-		fs_umount();
-		die("Cannot create file");
-	}
-
-	fs_fd = fs_open(filename);
-	if (fs_fd < 0) {
-		fs_umount();
-		die("Cannot open file");
-	}
-fs_lseek(fs_fd, 16);
-	written = fs_write(fs_fd, buf, st.st_size);
-
-	if (fs_close(fs_fd)) {
-		fs_umount();
-		die("Cannot close file");
-	}
-
-	if (fs_umount())
-		die("Cannot unmount diskname");
-
-	printf("Wrote file '%s' (%d/%zu bytes)\n", filename, written,
-		   st.st_size);
-
-	munmap(buf, st.st_size);
-	close(fd);
-}
-
-void thread_fs_write(void* arg)
-{
-	struct thread_arg *t_arg = arg;
-	char *diskname, *filename , *text;
-	int fd;
-	struct stat st;
-
-
-	if (t_arg->argc < 2)
-		die("Usage: <diskname> <host filename>");
-
-	diskname = t_arg->argv[0];
-	filename = t_arg->argv[1];
-	text = t_arg->argv[2];
-	printf("diskname <%s>\n", diskname);
-	printf("filename <%s>\n", filename);
-	fd = open(filename, O_RDONLY);
-	if (fd < 0)
-		die_perror("open");
-	if (fstat(fd, &st))
-		die_perror("fstat");
-	if (!S_ISREG(st.st_mode))
-		die("Not a regular file: %s\n", filename);
-
-int stat = fs_write(fd,text,sizeof(text));
-if (stat == -1) {
-	printf("oh shit\n");
-}
-fs_close(fd);
-fs_umount();
-
-
-}
-
-void thread_fs_new(void *arg)
-{
-	struct thread_arg *t_arg = arg;
-	char *diskname, *filename;
-
-	if (t_arg->argc < 2)
-		die("Usage: <diskname> <host filename>");
-
-	diskname = t_arg->argv[0];
-	filename = t_arg->argv[1];
- 	printf("diskname <%s>\n", diskname);
-  printf("filename <%s>\n", filename);
-	/* Open file on host computer */
-	open(filename, O_RDONLY);
-	/* Map file into buffer */
-
-
-	/* Now, deal with our filesystem:
-	 * - mount, create a new file, copy content of host file into this new
-	 *   file, close the new file, and umount
-	 */
-	if (fs_mount(diskname) == -1)
-		printf("Cannot mount diskname\n");
-
-	if (fs_create(filename) == -1) {
-		printf("Cannot create file\n");
-	}
-	fs_ls();
-	fs_umount();
-}
-
-void thread_fs_off(void *arg)
-{
-	struct thread_arg *t_arg = arg;
-	char *diskname, *filename, *buf;
-	int fs_fd;
-	int stat, read;
-
-	if (t_arg->argc < 2)
-		die("need <diskname> <filename>");
-
-	diskname = t_arg->argv[0];
-	filename = t_arg->argv[1];
-
-	if (fs_mount(diskname))
-		die("Cannot mount diskname");
-
-	fs_fd = fs_open(filename);
-	if (fs_fd < 0) {
-		fs_umount();
-		die("Cannot open file");
-	}
-
-	stat = fs_stat(fs_fd);
-	fs_lseek(fs_fd, 32);
-	if (stat < 0) {
-		fs_umount();
-		die("Cannot stat file");
-	}
-	if (!stat) {
-		/* Nothing to read, file is empty */
-		printf("Empty file\n");
-		return;
-	}
-	buf = malloc(stat);
-	if (!buf) {
-		perror("malloc");
-		fs_umount();
-		die("Cannot malloc");
-	}
-
-	read = fs_read(fs_fd, buf, stat);
-
-	if (fs_close(fs_fd)) {
-		fs_umount();
-		die("Cannot close file");
-	}
-
-	if (fs_umount())
-		die("cannot unmount diskname");
-
-	printf("Read file '%s' (%d/%d bytes)\n", filename, read, stat);
-	printf("Content of the file:\n");
-	fwrite(buf, 1, stat, stdout);
-	fflush(stdout);
-
-	free(buf);
 }
 
 void thread_fs_ls(void *arg)
@@ -454,66 +264,6 @@ void thread_fs_info(void *arg)
 		die("Cannot unmount diskname");
 }
 
-void thread_fs_mod(void* arg)
-{
-		struct thread_arg *t_arg = arg;
-	char *diskname, *filename, *buf;
-	int fd, fs_fd;
-	struct stat st;
-	int written;
-
-	if (t_arg->argc < 2)
-		die("Usage: <diskname> <host filename>");
-
-	diskname = t_arg->argv[0];
-	filename = t_arg->argv[1];
- 	printf("diskname <%s>\n", diskname);
-  printf("filename <%s>\n", filename);
-	/* Open file on host computer */
-	fd = open(filename, O_RDONLY);
-	if (fd < 0)
-		die_perror("open");
-	if (fstat(fd, &st))
-		die_perror("fstat");
-	if (!S_ISREG(st.st_mode))
-		die("Not a regular file: %s\n", filename);
-
-	/* Map file into buffer */
-	buf = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-	if (!buf)
-		die_perror("mmap");
-
-	/* Now, deal with our filesystem:
-	 * - mount, create a new file, copy content of host file into this new
-	 *   file, close the new file, and umount
-	 */
-	 printf("oh shit %s\n", diskname);
-	if (fs_mount(diskname))
-		die("Cannot mount diskname");
-
-	fs_fd = fs_open(filename);
-	if (fs_fd < 0) {
-		fs_umount();
-		die("Cannot open file");
-	}
-
-	written = fs_write(fs_fd, buf, st.st_size);
-
-	if (fs_close(fs_fd)) {
-		fs_umount();
-		die("Cannot close file");
-	}
-
-	if (fs_umount())
-		die("Cannot unmount diskname");
-
-	printf("Wrote file '%s' (%d/%zu bytes)\n", filename, written,
-		   st.st_size);
-
-	munmap(buf, st.st_size);
-	close(fd);
-}
-
 size_t get_argv(char *argv)
 {
 	long int ret = strtol(argv, NULL, 0);
@@ -529,16 +279,9 @@ static struct {
 	{ "info",	thread_fs_info },
 	{ "ls",		thread_fs_ls },
 	{ "add",	thread_fs_add },
-	{ "addoff",	thread_fs_addoff },
-	{ "new" , thread_fs_new},
 	{ "rm",		thread_fs_rm },
 	{ "cat",	thread_fs_cat },
-	{ "stat",	thread_fs_stat },
-	{  "write", thread_fs_write},
-	{ "off", thread_fs_off},
-	{ "mod", thread_fs_mod}
-	// File descriptors, reading/writing, error management
-	
+	{ "stat",	thread_fs_stat }
 };
 
 void usage(char *program)
