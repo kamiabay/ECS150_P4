@@ -92,8 +92,8 @@ int fs_mount(const char *diskname)
 		return -1;
 	}
 	mainDisk = malloc(sizeof(struct Disk)); // Allocate the disk
-	readSuper();					// Read the superblock
-	if (strncmp("ECS150FS", (char*)mainDisk->superblock->signature, 8))
+	readSuper();							// Read the superblock
+	if (strncmp("ECS150FS", (char *)mainDisk->superblock->signature, 8))
 	{
 		perror("invalid signature");
 		return -1;
@@ -113,15 +113,11 @@ int fs_mount(const char *diskname)
 int fs_umount(void)
 {
 	if (diskOpened == 0)
-	{
 		return -1;
-	}
 	for (int i = 0; i < FS_FILE_MAX_COUNT; i++)
 	{ // Check all files are closed
 		if (FileDesc[i].filename != NULL)
-		{
 			return -1;
-		}
 	}
 	block_write(0, mainDisk->superblock);							 // Write the superblock back
 	for (int i = 1; i < mainDisk->superblock->numFATblocks + 1; i++) //Write the FAT blocks back
@@ -132,9 +128,7 @@ int fs_umount(void)
 	free(mainDisk);													 // Delete the block from the disk
 	mainDisk = NULL;
 	if (block_disk_close() == -1) // Close the disk
-	{
 		perror("close");
-	}
 	diskOpened = 0;
 	return 0;
 }
@@ -182,25 +176,20 @@ static int freeSpace()
 
 int fs_create(const char *filename)
 {
-	int space = freeSpace(); // Find and get the slot for this file
-	if (space == -1)
-	{ // Return -1 if we have no free space
-		//printf("Out of space\n");
-		return -1;
-	}
 	if (sizeof(filename) >= FS_FILENAME_LEN)
 	{ // Check the length of the file
-		//printf("This disk aint big enough for that long ass name\n");
 		return -1;
 	}
 	for (int i = 0; i < FS_FILE_MAX_COUNT; i++)
 	{ // Check if there is a file of the same name
 		if (!strcmp(filename, mainDisk->rootDir[i].Filename))
 		{
-			//printf("Copied\n");
 			return -1;
 		}
 	}
+	int space = freeSpace(); // Find and get the slot for this file
+	if (space == -1)		 // Return -1 if we have no free space
+		return -1;
 	mainDisk->rootDir[space].FirstIndex = FAT_EOC;					 // Make start index FAT_EOC
 	strcpy(mainDisk->rootDir[space].Filename, filename);			 // Read filename into the freespace
 	mainDisk->rootDir[space].Filesize = 0;							 // Initialize the size to zero
@@ -239,13 +228,10 @@ int fs_delete(const char *filename)
 	{ // Make sure filename exists
 		return -1;
 	}
-
 	int initSize = mainDisk->rootDir[fileInd].Filesize;
 	mainDisk->rootDir[fileInd].Filesize = 0;		   // Delete
 	strcpy(mainDisk->rootDir[fileInd].Filename, "\0"); // Remove the filename
 	int index = mainDisk->rootDir[fileInd].FirstIndex; // Erase entry from FAT table
-	// printf("Size %i\n", mainDisk->rootDir[fileInd].Filesize);
-	// printf("Index %i\n", fileInd);
 	if (mainDisk->fat[index] != FAT_EOC && initSize != 0)
 	{
 		int entry = mainDisk->fat[index];
@@ -256,7 +242,6 @@ int fs_delete(const char *filename)
 			entry = mainDisk->fat[entry];
 			mainDisk->fat[oldentry] = 0;
 		}
-		//printf("Helloooooooooooooooooooooo\n");
 		mainDisk->fat[index] = 0;
 		writeFAT(); // Update it to disk
 	}
@@ -275,16 +260,11 @@ int fs_ls(void)
 				   mainDisk->rootDir[i].FirstIndex);
 		}
 	}
-	// for (int i = 0; i < mainDisk->superblock->numFATblocks * 48; i++)
-	// {
-	// 	printf("fat val= %i\n", mainDisk->fat[i]);
-	// }
 	return 0;
 }
 
 int fs_open(const char *filename)
 {
-	/* TODO: Phase 3 */
 	int fd = 0; // initialize fd
 	if (findFile(filename) == -1)
 	{
@@ -318,15 +298,8 @@ int fs_open(const char *filename)
 
 int fs_close(int fd)
 {
-	/* TODO: Phase 3 */
-	if (fd < 0 || fd > FS_OPEN_MAX_COUNT)
-	{
+	if (fd < 0 || fd > FS_OPEN_MAX_COUNT || FileDesc[fd].filename == NULL)
 		return -1;
-	}
-	if (FileDesc[fd].filename == NULL)
-	{
-		return -1;
-	}
 	FileDesc[fd].filename = NULL;
 	FileDesc[fd].offset = 0;
 	return 0;
@@ -334,33 +307,15 @@ int fs_close(int fd)
 
 int fs_stat(int fd)
 {
-	/* TODO: Phase 3 */
-	if (fd < 0 || fd > FS_OPEN_MAX_COUNT)
-	{
+	if (fd < 0 || fd > FS_OPEN_MAX_COUNT || FileDesc[fd].filename == NULL)
 		return -1;
-	}
-	if (FileDesc[fd].filename == NULL)
-	{
-		return -1;
-	}
 	return FileDesc[fd].size;
 }
 
 int fs_lseek(int fd, size_t offset)
 {
-	/* TODO: Phase 3 */
-	if (fd < 0 || fd > FS_OPEN_MAX_COUNT)
-	{
+	if (fd < 0 || fd > FS_OPEN_MAX_COUNT || offset > FileDesc[fd].size || FileDesc[fd].filename == NULL)
 		return -1;
-	}
-	if (offset > FileDesc[fd].size)
-	{
-		return -1;
-	}
-	if (FileDesc[fd].filename == NULL)
-	{
-		return -1;
-	}
 	FileDesc[fd].offset = offset;
 	return 0;
 }
@@ -376,25 +331,7 @@ static int findFirstFAT(int index)
 	}
 	return -1;
 }
-/*
-static int updateFAT(int fd)
-{
-	int i = FileDesc[fd].dataIndex;
-	//int init = i;
-	while (mainDisk->fat[i] != FAT_EOC)
-	{
-		i = mainDisk->fat[i];
-	}
-	int newFreeblock = findFirstFAT(0);
-	if (findFirstFAT(0) == -1)
-	{
-		return -1;
-	}
-	mainDisk->fat[i] = newFreeblock;
-	mainDisk->fat[newFreeblock] = FAT_EOC;
-	return 0;
-}
-*/
+
 int fs_write(int fd, void *buf, size_t count)
 {
 	size_t offset = FileDesc[fd].offset;
@@ -407,10 +344,8 @@ int fs_write(int fd, void *buf, size_t count)
 	{
 		//FileDesc[fd].dataIndex = fatIndex;
 	}
-	//int numBlocks = count / BLOCK_SIZE + 1;
 	void *temp = malloc(BLOCK_SIZE);
 	int currDataIndex = FileDesc[fd].dataIndex;
-	//int moreBlocks = count / BLOCK_SIZE + 1;
 	size_t location = 0;
 	size_t capacity = 0;
 	int prev = currDataIndex;
@@ -441,7 +376,8 @@ int fs_write(int fd, void *buf, size_t count)
 		}
 
 		capacity = BLOCK_SIZE - offset;
-		if (BLOCK_SIZE - offset > count) {
+		if (BLOCK_SIZE - offset > count)
+		{
 			capacity = count;
 		}
 		block_read(mainDisk->superblock->dataIndex + currDataIndex, temp);
@@ -451,43 +387,8 @@ int fs_write(int fd, void *buf, size_t count)
 		currDataIndex = mainDisk->fat[currDataIndex];
 		offset = 0;
 		numRead = numRead + capacity;
-
 	}
 	FileDesc[fd].offset = BLOCK_SIZE - capacity;
-
-	// mainDisk->fat[fatIndex] = FAT_EOC;
-	// if (moreBlocks > 1)
-	// {
-	// 	for (int i = 0; i < moreBlocks - 1; i++)
-	// 	{
-	// 		if (updateFAT(fd) == -1)
-	// 		{
-	// 			return -1;
-	// 		}
-	// 	}
-	// }
-	// int i = 0;
-	// while (mainDisk->fat[currDataIndex] != FAT_EOC)
-	// {
-	// 	int stat = block_write(mainDisk->superblock->dataIndex + currDataIndex, buf + BLOCK_SIZE * i + offset);
-	// 	i++;
-	// 	if (stat == -1)
-	// 	{
-	// 		return -1;
-	// 	}
-	// 	strcat(total, buf);
-	// 	currDataIndex = mainDisk->fat[currDataIndex];
-	// }
-
-	// int stat = block_write(mainDisk->superblock->dataIndex + currDataIndex, buf + BLOCK_SIZE * i + offset);
-	// if (stat == -1)
-	// {
-	// 	return -1;
-	// }
-	// strcat(total, buf);
-	// memcpy(temp, buf, count);
-	// mainDisk->rootDir[findFileInDisk(FileDesc[fd].filename)].FirstIndex = fatIndex;
-	// FileDesc[fd].size = count;
 	mainDisk->rootDir[findFileInDisk(FileDesc[fd].filename)].Filesize += numRead;
 	return numRead;
 }
@@ -495,9 +396,7 @@ int fs_write(int fd, void *buf, size_t count)
 int fs_read(int fd, void *buf, size_t count)
 {
 	if (fd < 0 || fd > FS_OPEN_MAX_COUNT || FileDesc[fd].filename == NULL)
-	{
 		return -1;
-	}
 	int numBlocks = count / BLOCK_SIZE + 1;
 	void *buff = malloc(BLOCK_SIZE * numBlocks);
 	void *total = malloc(BLOCK_SIZE * numBlocks);
@@ -512,7 +411,5 @@ int fs_read(int fd, void *buf, size_t count)
 	block_read(mainDisk->superblock->dataIndex + currDataIndex, buff);
 	strcat(total, buff);
 	memcpy(buf, total + offset, count);
-
 	return count;
 }
-
