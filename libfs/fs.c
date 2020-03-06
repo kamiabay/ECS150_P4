@@ -17,7 +17,7 @@ int diskOpened = 0;
 
 struct __attribute__((packed)) Superblock
 {
-	char signature[8];
+	uint8_t signature[8];
 	uint16_t numTotalBlocks;
 	uint16_t rootIndex;
 	uint16_t dataIndex;
@@ -55,7 +55,7 @@ fdesc FileDesc[FS_FILE_MAX_COUNT];
 static void readSuper()
 {
 	Sblok superblock = malloc(BLOCK_SIZE);
-
+	block_read(0, superblock);
 	mainDisk->superblock = superblock;
 }
 
@@ -88,19 +88,19 @@ int fs_mount(const char *diskname)
 {
 	if (block_disk_open(diskname) == -1)
 	{
-		perror("open");
+		perror("no diskname");
 		return -1;
 	}
 	mainDisk = malloc(sizeof(struct Disk)); // Allocate the disk
-	readSuper();							// Read the superblock
-	if (strncmp("ECS150FS", mainDisk->superblock->signature, 8))
+	readSuper();					// Read the superblock
+	if (strncmp("ECS150FS", (char*)mainDisk->superblock->signature, 8))
 	{
-		perror("open");
+		perror("invalid signature");
 		return -1;
 	}
 	if (mainDisk->superblock->numTotalBlocks != block_disk_count()) // Get superblock contents
 	{
-		perror("open");
+		perror("wrong count");
 		return -1;
 	}
 	readFAT();					// Get the FAT table
@@ -365,11 +365,10 @@ int fs_lseek(int fd, size_t offset)
 	return 0;
 }
 
-static int findFirstFAT()
+static int findFirstFAT(int index)
 {
-	for (int i = 0; i < BLOCK_SIZE * mainDisk->superblock->numFATblocks; i++)
+	for (int i = index; i < BLOCK_SIZE * mainDisk->superblock->numFATblocks; i++)
 	{
-		//printf("fat val= %i\n", mainDisk->fat[i]);
 		if (mainDisk->fat[i] == 0)
 		{
 			return i;
@@ -377,7 +376,7 @@ static int findFirstFAT()
 	}
 	return -1;
 }
-
+/*
 static int updateFAT(int fd)
 {
 	int i = FileDesc[fd].dataIndex;
@@ -386,8 +385,8 @@ static int updateFAT(int fd)
 	{
 		i = mainDisk->fat[i];
 	}
-	int newFreeblock = findFirstFAT();
-	if (findFirstFAT() == -1)
+	int newFreeblock = findFirstFAT(0);
+	if (findFirstFAT(0) == -1)
 	{
 		return -1;
 	}
@@ -395,68 +394,103 @@ static int updateFAT(int fd)
 	mainDisk->fat[newFreeblock] = FAT_EOC;
 	return 0;
 }
-
+*/
 int fs_write(int fd, void *buf, size_t count)
 {
 	size_t offset = FileDesc[fd].offset;
-	int fatIndex = findFirstFAT();
-	//printf("fd: %i\n", FileDesc[fd].offset);
+	int fatIndex = findFirstFAT(0);
 	if (fd < 0 || fd > FS_OPEN_MAX_COUNT || FileDesc[fd].filename == NULL || fatIndex == -1)
 	{
-		//printf("FAIL WERITE\n");
 		return -1;
 	}
 	if (FileDesc[fd].size == 0)
 	{
-		FileDesc[fd].dataIndex = fatIndex;
+		//FileDesc[fd].dataIndex = fatIndex;
 	}
-	int numBlocks = count / BLOCK_SIZE + 1;
-	//printf("blocks = %i\n", numBlocks);
-	//printf("fat = %i\n", fatIndex);
-	void *total = malloc(BLOCK_SIZE * numBlocks * 1000);
-	void *buff = malloc(BLOCK_SIZE * numBlocks * 1000);
-
+	//int numBlocks = count / BLOCK_SIZE + 1;
+	void *temp = malloc(BLOCK_SIZE);
 	int currDataIndex = FileDesc[fd].dataIndex;
-	int moreBlocks = count / BLOCK_SIZE + 1;
-	//if (FileDesc[fd].size == 0) {
-	//printf("Writing new file\n");
-
-	mainDisk->fat[fatIndex] = FAT_EOC;
-	if (moreBlocks > 1)
+	//int moreBlocks = count / BLOCK_SIZE + 1;
+	size_t location = 0;
+	size_t capacity = 0;
+	int prev = currDataIndex;
+	if (mainDisk->rootDir[findFileInDisk(FileDesc[fd].filename)].FirstIndex == FAT_EOC)
 	{
-		for (int i = 0; i < moreBlocks - 1; i++)
+		fatIndex = findFirstFAT(0);
+		if (fatIndex == -1)
 		{
-			if (updateFAT(fd) == -1)
+			return location;
+		}
+		mainDisk->fat[fatIndex] = FAT_EOC;
+		currDataIndex = fatIndex;
+		mainDisk->rootDir[findFileInDisk(FileDesc[fd].filename)].FirstIndex = fatIndex;
+	}
+	size_t numRead = 0;
+	while (numRead < count)
+	{
+		if (currDataIndex == FAT_EOC)
+		{
+			fatIndex = findFirstFAT(0);
+			if (fatIndex == -1)
 			{
-				return -1;
+				return numRead;
 			}
+			mainDisk->fat[prev] = fatIndex;
+			mainDisk->fat[fatIndex] = FAT_EOC;
+			currDataIndex = fatIndex;
 		}
-	}
-	int i = 0;
-	while (mainDisk->fat[currDataIndex] != FAT_EOC)
-	{
-		//printf("count: %li\n", count / BLOCK_SIZE + 1);
-		int stat = block_write(mainDisk->superblock->dataIndex + currDataIndex, buf + BLOCK_SIZE * i + offset);
-		i++;
-		if (stat == -1)
-		{
-			return -1;
-		}
-		strcat(total, buf);
-		currDataIndex = mainDisk->fat[currDataIndex];
-	}
 
-	int stat = block_write(mainDisk->superblock->dataIndex + currDataIndex, buf + BLOCK_SIZE * i + offset);
-	if (stat == -1)
-	{
-		return -1;
+		capacity = BLOCK_SIZE - offset;
+		if (BLOCK_SIZE - offset > count) {
+			capacity = count;
+		}
+		block_read(mainDisk->superblock->dataIndex + currDataIndex, temp);
+		memcpy(temp + offset, buf + numRead, capacity);
+		block_write(mainDisk->superblock->dataIndex + currDataIndex, temp);
+		prev = currDataIndex;
+		currDataIndex = mainDisk->fat[currDataIndex];
+		offset = 0;
+		printf("capacity: %li\n", capacity);
+		numRead = numRead + capacity;
+
 	}
-	strcat(total, buf);
-	memcpy(buff, buf, count);
-	mainDisk->rootDir[findFileInDisk(FileDesc[fd].filename)].FirstIndex = fatIndex;
-	FileDesc[fd].size = count;
-	mainDisk->rootDir[findFileInDisk(FileDesc[fd].filename)].Filesize = count;
-	return count;
+	FileDesc[fd].offset = BLOCK_SIZE - capacity;
+
+	// mainDisk->fat[fatIndex] = FAT_EOC;
+	// if (moreBlocks > 1)
+	// {
+	// 	for (int i = 0; i < moreBlocks - 1; i++)
+	// 	{
+	// 		if (updateFAT(fd) == -1)
+	// 		{
+	// 			return -1;
+	// 		}
+	// 	}
+	// }
+	// int i = 0;
+	// while (mainDisk->fat[currDataIndex] != FAT_EOC)
+	// {
+	// 	int stat = block_write(mainDisk->superblock->dataIndex + currDataIndex, buf + BLOCK_SIZE * i + offset);
+	// 	i++;
+	// 	if (stat == -1)
+	// 	{
+	// 		return -1;
+	// 	}
+	// 	strcat(total, buf);
+	// 	currDataIndex = mainDisk->fat[currDataIndex];
+	// }
+
+	// int stat = block_write(mainDisk->superblock->dataIndex + currDataIndex, buf + BLOCK_SIZE * i + offset);
+	// if (stat == -1)
+	// {
+	// 	return -1;
+	// }
+	// strcat(total, buf);
+	// memcpy(temp, buf, count);
+	// mainDisk->rootDir[findFileInDisk(FileDesc[fd].filename)].FirstIndex = fatIndex;
+	// FileDesc[fd].size = count;
+	mainDisk->rootDir[findFileInDisk(FileDesc[fd].filename)].Filesize += numRead;
+	return numRead;
 }
 
 int fs_read(int fd, void *buf, size_t count)
@@ -482,3 +516,4 @@ int fs_read(int fd, void *buf, size_t count)
 
 	return count;
 }
+
